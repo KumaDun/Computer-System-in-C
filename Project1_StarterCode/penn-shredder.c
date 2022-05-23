@@ -14,7 +14,7 @@ void executeShell(int timeout);
 
 void writeToStdout(char *text);
 
-void alarmHandler(int sig);exec('')
+void alarmHandler(int sig);
 
 void sigintHandler(int sig);
 
@@ -58,6 +58,7 @@ void killChildProcess() {
  * kills the child process if it exists and is still executing.
  * It then prints out penn-shredder's catchphrase to standard output */
 void alarmHandler(int sig) {
+
 }
 
 /* Signal handler for SIGINT. Catches SIGINT signal (e.g. Ctrl + C) and
@@ -119,6 +120,7 @@ void executeShell(int timeout) {
             } while (!WIFEXITED(status) && !WIFSIGNALED(status));
         }
     }
+    free(command);
 }
 
 /* Writes particular text to standard output */
@@ -137,5 +139,75 @@ void writeToStdout(char *text) {
  * buffer are assigned to command and returned. An \0 is appended to the command so
  * that it is null terminated */
 char *getCommandFromInput() {
-    return "/bin/ls";
+    char *inputBuffer = calloc(INPUT_SIZE,sizeof(char));
+    if (inputBuffer == NULL) {
+        perror("Memory allocation failure for inputBuffer \n");
+        exit(EXIT_FAILURE);
+    }
+
+    int numBytes = read(STDIN_FILENO, inputBuffer, INPUT_SIZE);
+    
+    /*Check for blank input
+    Also compatible with input Ctrl+D without text
+    */
+    if (numBytes == 0) {
+        write(STDOUT_FILENO,"Nothing read \n",13);
+        free(inputBuffer);
+        exit(EXIT_FAILURE);
+    }
+    printf("numByte is %d \n", numBytes);
+    
+    /*Handle the space issue
+    If encoutering space, skip this char and increment spaceCount.
+    After loop, if spaceCount = string length of inputBuffer -1, print all space input error and exit
+    String lengh include \n at end of inputBuffer, spaceCount does not, -1 to match
+    */
+    int i = 0;
+    int spaceCount = 0;
+    for (i=0;i<numBytes;i++) {
+        if (inputBuffer[i]==' ') {
+            spaceCount++;
+        }
+    }
+    if (spaceCount == strlen(inputBuffer)-1) {
+        perror("All space input, please re-launch the program \n");
+        free(inputBuffer);
+        exit(EXIT_FAILURE);
+    }
+
+    /*Copy char to char from inputBuffer to command
+    command does not keep the '\0' string terminator from buffer
+    command does not include space from buffer
+    */
+    char *command = malloc((numBytes-spaceCount-1)*sizeof(char));
+        if (command == NULL) {
+            perror("Memory allocation failure for command \n");
+            exit(EXIT_FAILURE);
+    }
+    
+    char *inputBufferAddr = inputBuffer;
+    for (i=0;i<numBytes-spaceCount-1;i++) {
+        if (*inputBufferAddr == '\0') {
+            break;
+        }
+
+        if (*inputBufferAddr==' ') {
+            inputBufferAddr++;
+            i--;
+            continue;
+        }
+        command[i] = *inputBufferAddr;
+        inputBufferAddr++;
+    }
+    
+
+    printf("command length is %lu \n",strlen(command));
+    free(inputBuffer);
+    for(i=0;i<strlen(command);i++){
+        printf("%d : ",i);
+        printf("%c \n",command[i]);
+    }
+    write(STDOUT_FILENO,command,strlen(command)+1);
+
+    return command;
 }
