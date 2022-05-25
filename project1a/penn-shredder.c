@@ -25,6 +25,7 @@ void registerSignalHandlers();
 void killChildProcess();
 
 int main(int argc, char **argv) {
+    printf("Registering signal handler...\n");
     registerSignalHandlers();
 
     int timeout = 0;
@@ -38,6 +39,8 @@ int main(int argc, char **argv) {
     }
 
     while (1) {
+        childPid = 100;
+        printf("Exevuting command in a loop...\n");
         executeShell(timeout);
     }
 
@@ -48,6 +51,7 @@ int main(int argc, char **argv) {
  * Error checks for kill system call failure and exits program if
  * there is an error */
 void killChildProcess() {
+    printf("_killChildProcess childPid is %d \n", childPid);
     if (kill(childPid, SIGKILL) == -1) {
         perror("Error in kill");
         exit(EXIT_FAILURE);
@@ -58,14 +62,21 @@ void killChildProcess() {
  * kills the child process if it exists and is still executing.
  * It then prints out penn-shredder's catchphrase to standard output */
 void alarmHandler(int sig) {
-
+    printf("Alart handler\n");
 }
 
 /* Signal handler for SIGINT. Catches SIGINT signal (e.g. Ctrl + C) and
  * kills the child process if it exists and is executing. Does not
  * do anything to the parent process and its execution */
 void sigintHandler(int sig) {
-    if (childPid != 0) {
+    printf("_sigintHandler childPid is %d...\n", childPid);
+    /*if (childPid > 0 || childPid < 0) {
+        printf("_sigintHandler if childPid not 0, before _killChildProcess childPid is %d...\n", childPid);
+        printf("Killing child process with Pid %d \n",childPid); 
+        killChildProcess();
+    }*/
+    if (childPid == 0) {
+        printf("_sigintHandler if childPid equal 0, before _killChildProcess childPid is %d...\n", childPid);
         killChildProcess();
     }
 }
@@ -75,9 +86,12 @@ void sigintHandler(int sig) {
  * Error checks for signal system call failure and exits program if
  * there is an error */
 void registerSignalHandlers() {
+    printf("_registerSignalHandler childPid is %d...\n", childPid);
     if (signal(SIGINT, sigintHandler) == SIG_ERR) {
         perror("Error in signal");
         exit(EXIT_FAILURE);
+    } else {
+        printf("No error in signal check. Continue...\n");
     }
 }
 
@@ -95,9 +109,34 @@ void executeShell(int timeout) {
     writeToStdout(minishell);
 
     command = getCommandFromInput();
+    printf("Command: %s ...\n", command);
+    if (command == NULL) {
+        free(command);
+        return;
+    }
+    char commandFirstChar = command [0];
+    if (commandFirstChar == ' ' || commandFirstChar == '\0'){
+        free(command);
+        return;
+    }
+    if (strlen(command) < 5) {
+        perror("invalid|No such file or directory");
+        free(command);
+        return;
+    }
+    char validCommandStr[] = {'/','b','i','n','/','\0'};
+    char commandStr[] = {command[0],command[1],command[2],command[3],command[4],'\0'};
+    if (strcmp(validCommandStr,commandStr) != 0){
+        perror("invalid|No such file or directory");
+        free(command);
+        return;
+    } 
 
     if (command != NULL) {
+        printf("_executeShell childPid before fork is %d... \n",childPid);
         childPid = fork();
+
+        printf("_executeShell childPid after fork is : %d\n", childPid);
 
         if (childPid < 0) {
             perror("Error in creating child process");
@@ -107,17 +146,22 @@ void executeShell(int timeout) {
         if (childPid == 0) {
             char *const envVariables[] = {NULL};
             char *const args[] = {command, NULL};
+            printf("_executeShell childPid==0 part before execve childPid is : %d\n", childPid);
             if (execve(command, args, envVariables) == -1) {
-                perror("Error in execve");
+                perror("invalid|No such file or directory");
                 exit(EXIT_FAILURE);
             }
+            printf("_executeShell childPid==0 part after execve childPid is %d \n",childPid);
         } else {
+            printf("_executeShell childPid>0 part before dowhile childPid is %d \n",childPid);
             do {
                 if (wait(&status) == -1) {
                     perror("Error in child process termination");
                     exit(EXIT_FAILURE);
                 }
             } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+            printf("_executeShell childPid>0 part after dowhile childPid is %d \n",childPid);
+            printf("parent process stop wait...\n");
         }
     }
     free(command);
@@ -141,7 +185,7 @@ void writeToStdout(char *text) {
 char *getCommandFromInput() {
     char *inputBuffer = calloc(INPUT_SIZE,sizeof(char));
     if (inputBuffer == NULL) {
-        perror("Memory allocation failure for inputBuffer \n");
+        writeToStdout("Memory allocation failure for inputBuffer \n");
         exit(EXIT_FAILURE);
     }
 
@@ -151,8 +195,8 @@ char *getCommandFromInput() {
     Also compatible with input Ctrl+D without text
     */
     if (numBytes == 0) {
-        write(STDOUT_FILENO,"Nothing read \n",13);
         free(inputBuffer);
+        writeToStdout("Nothing read \n");
         exit(EXIT_FAILURE);
     }
     
@@ -169,37 +213,37 @@ char *getCommandFromInput() {
         }
     }
     if (spaceCount == strlen(inputBuffer)-1) {
-        perror("All space input, please re-launch the program \n");
+        printf("All space");
         free(inputBuffer);
-        exit(EXIT_FAILURE);
+        return NULL;
     }
+
+    
+    //trim leading empty space
+    char *bufferStrAddr = inputBuffer;
+    while (*bufferStrAddr == ' ') {bufferStrAddr++;}
+
+    //trim ending empty space
+    char *bufferEndAddr = inputBuffer+strlen(inputBuffer)-1;
+    while (bufferEndAddr>inputBuffer && (*bufferEndAddr == ' ' || *bufferEndAddr == '\n')) {bufferEndAddr--;}
 
     /*Copy char to char from inputBuffer to command
     command does not keep the '\0' string terminator from buffer
-    command does not include space from buffer
+    command does not include leading or ending space from buffer
     */
-    char *command = malloc((numBytes-spaceCount-1)*sizeof(char));
+    char *command = malloc((bufferEndAddr-bufferStrAddr+2)*sizeof(char));
         if (command == NULL) {
-            perror("Memory allocation failure for command \n");
+            writeToStdout("Memory allocation failure for command \n");
             exit(EXIT_FAILURE);
     }
-    
-    char *inputBufferAddr = inputBuffer;
-    for (i=0;i<numBytes-spaceCount-1;i++) {
-        if (*inputBufferAddr == '\0') {
-            break;
-        }
-
-        if (*inputBufferAddr==' ') {
-            inputBufferAddr++;
-            i--;
-            continue;
-        }
-        command[i] = *inputBufferAddr;
-        inputBufferAddr++;
+    i=0;
+    while(i<=(bufferEndAddr-bufferStrAddr)){
+        command[i] = bufferStrAddr[i];
+        printf("%d : %c \n", i, command[i]);
+        i++;
     }
+    command[bufferEndAddr-bufferStrAddr+2] = '\0';
     
-
     free(inputBuffer);
     return command;
 }

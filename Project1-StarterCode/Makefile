@@ -6,7 +6,7 @@ CLANG = -g -Wall
 
 TARGETS = clean penn-shredder
 
-.PHONY: penn-shredder
+.PHONY: penn-shredder alarm
 
 # If no arguments are passed to make, it will attempt the 'penn-shredder' target
 default: penn-shredder
