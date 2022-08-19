@@ -118,12 +118,10 @@ int main(int argc, char *argv[]) {
             }
             //handle new socket ready
             for (int i = 0; i<MAX_PENDING;i++) {
-                if (new_sockets[i]>0 && FD_ISSET(new_sockets[i],&rfds)){
+                if (new_sockets[i]>0 && FD_ISSET(new_sockets[i],&temp_rfds)){
                     //handle second shake
                     if (handshake_flags[i] > -1) {
                         handle_second_shake(new_sockets[i],handshake_xNums[i]);
-                        handshake_flags[i] = -2;
-
                         //after second handler, remove the fd from set
                         FD_CLR(new_sockets[i],&rfds);
                         close(new_sockets[i]);
