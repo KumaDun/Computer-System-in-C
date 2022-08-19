@@ -39,8 +39,9 @@ int main(int argc, char **argv) {
     }
 
     while (1) {
-        //childPid = 100;
-        printf("Exevuting command in a loop...\n");
+        /* Reset the alarm clock
+        */
+        alarm(0);
         executeShell(timeout);
     }
 
@@ -51,7 +52,6 @@ int main(int argc, char **argv) {
  * Error checks for kill system call failure and exits program if
  * there is an error */
 void killChildProcess() {
-    printf("_killChildProcess childPid is %d \n", childPid);
     if (kill(childPid, SIGKILL) == -1) {
         perror("Error in kill");
         exit(EXIT_FAILURE);
@@ -62,24 +62,18 @@ void killChildProcess() {
  * kills the child process if it exists and is still executing.
  * It then prints out penn-shredder's catchphrase to standard output */
 void alarmHandler(int sig) {
-    printf("_Alart handler childPid is %d\n",childPid);
-    writeToStdout("Bwahaha ... tonight I dine on turtle soup");
+    writeToStdout("Bwahaha ... tonight I dine on turtle soup \n");
+    killChildProcess();
 }
 
 /* Signal handler for SIGINT. Catches SIGINT signal (e.g. Ctrl + C) and
  * kills the child process if it exists and is executing. Does not
  * do anything to the parent process and its execution */
 void sigintHandler(int sig) {
-    //printf("_sigintHandler childPid is %d...\n", childPid);
+    printf("_sigintHandler childPid is %d...\n", childPid);
     if (childPid != 0) {
-        //printf("_sigintHandler if childPid equal 0, before _killChildProcess childPid is %d...\n", childPid);
-        //printf("Killing child process with Pid %d \n",childPid); 
         killChildProcess();
     }
-    /*if (childPid == 0) {
-        printf("_sigintHandler if childPid equal 0, before _killChildProcess childPid is %d...\n", childPid);
-        killChildProcess();
-    }*/
 }
 
 
@@ -87,12 +81,10 @@ void sigintHandler(int sig) {
  * Error checks for signal system call failure and exits program if
  * there is an error */
 void registerSignalHandlers() {
-    printf("_registerSignalHandler childPid is %d...\n", childPid);
     if (signal(SIGINT, sigintHandler) == SIG_ERR) {
         perror("Error in interrupt signal");
         exit(EXIT_FAILURE);
     } else {
-        //printf("No error in interrupt signal check. Continue...\n");
     }
     if (signal(SIGALRM,alarmHandler)== SIG_ERR) {
         perror("Error in alarm signal");
@@ -115,7 +107,6 @@ void executeShell(int timeout) {
 
     command = getCommandFromInput();
     //command valid check
-    printf("_executeShell Command: %s n", command);
     if (command == NULL) {
         writeToStdout("command NULL check \n");
         free(command);
@@ -127,13 +118,10 @@ void executeShell(int timeout) {
         free(command);
         return;
     }
-
+    
     //execute
     if (command != NULL) {
-        printf("_executeShell childPid before fork is %d... \n",childPid);
         childPid = fork();
-
-        printf("_executeShell childPid after fork is : %d\n", childPid);
 
         if (childPid < 0) {
             perror("Error in creating child process");
@@ -143,24 +131,42 @@ void executeShell(int timeout) {
         if (childPid == 0) {
             char *const envVariables[] = {NULL};
             char *const args[] = {command, NULL};
-            printf("_executeShell childPid==0 part before execve childPid is : %d\n", childPid);
             if (execve(command, args, envVariables) == -1) {
                 perror("invalid|No such file or directory");
                 exit(EXIT_FAILURE);
             }
-            printf("_executeShell childPid==0 part after execve childPid is %d \n",childPid);
-            alarmHandler(timeout);
         } else {
-            printf("_executeShell childPid>0 part before dowhile childPid is %d \n",childPid);
+            /*Note 1:
+
+            The child process can finish by either being terminated naturally (WIFEXITED) or killed by a signal (WIFSIGNALED). 
+
+            Note 2:
+
+            The wait() returns -1 on all failures. When you get an error you should call a perror and exit the parent and the program should run.
+
+            Note 3:
+
+            The wait() system call returns a positive number as long as the child changes its state. The change is not necessary to be terminated or killed.
+            To make sure the wait() returns because the child process was finished, we need to use WIFEXITED and WIFSIGNALED macros to verify.
+            Therefore, you should put wait() in a do-while loop by checking WIFEXITED and WIFSIGNALED macros to make sure all the exited processes are collected.
+            It prevents creating zombie processes.
+            
+            */
+
             do {
+                /*Start the alarm
+                */
+                alarm(timeout);
                 if (wait(&status) == -1) {
                     perror("Error in child process termination");
                     exit(EXIT_FAILURE);
                 }
             } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-            printf("_executeShell childPid>0 part after dowhile childPid is %d \n",childPid);
+            
+            /*
+            Reset childPid to 0 for parent process so it will not send kill signal after wait() successed and quit
+            */
             childPid = 0;
-            printf("parent process stop wait and current childPid is %d ... \n",childPid);
         }
     }
     free(command);
@@ -212,7 +218,6 @@ char *getCommandFromInput() {
         }
     }
     if (spaceCount == strlen(inputBuffer)-1) {
-        //printf("All space");
         free(inputBuffer);
         return NULL;
     }
@@ -253,20 +258,19 @@ char *getCommandFromInput() {
     command does not include leading or ending space from buffer
     */
     char *command = malloc((strlen(bufferStrAddr)+1)*sizeof(char));
-        printf("bufferInput valid str is %lu",strlen(bufferStrAddr));
+        //printf("bufferInput valid str is %lu",strlen(bufferStrAddr));
         if (command == NULL) {
             writeToStdout("Memory allocation failure for command \n");
             exit(EXIT_FAILURE);
     }
     i=0;
     while(i < strlen(bufferStrAddr) ){
-        printf("Added the %d th command char ",i);
         command[i] = bufferStrAddr[i];
-        printf("%d : %c \n", i, command[i]);
         i++;
     }
+    /*Add NULL at end of the command
+    */
     command[i]='\0';
-    printf("%d : %c \n", i, bufferEndAddr[1]);
 
     free(inputBuffer);
     return command;

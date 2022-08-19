@@ -9,7 +9,7 @@ TARGETS = clean penn-shredder
 .PHONY: penn-shredder alarm
 
 # If no arguments are passed to make, it will attempt the 'penn-shredder' target
-default: penn-shredder Test
+default: penn-shredder
 
 # This runs the 'clean' and 'penn-shredder' targets when 'make all' is run
 all: $(TARGETS)
@@ -20,10 +20,7 @@ all: $(TARGETS)
 penn-shredder: penn-shredder.c
 	clang -Wall -g $< -o $@
 
-Test: Test.c
-	clang -Wall -g $< -o $@
-
 # $(RM) is the platform agnostic way to delete a file (here rm -f)
 clean:
-	$(RM) penn-shredder Test
+	$(RM) penn-shredder
 
